@@ -24,7 +24,7 @@ internal class SizeStrategy<Key : IKey, Value : IValue>  {
         val result = groupedMap.get(key)
         if (result != null) {
             // Decrement must be called before reconfigure.
-            decrementBitmapOfSize(result)
+            decrementSize(result)
         }
         return result
     }
@@ -32,12 +32,12 @@ internal class SizeStrategy<Key : IKey, Value : IValue>  {
     fun removeLast(): Value? {
         val removed: Value? = groupedMap.removeLast()
         if (removed != null) {
-            decrementBitmapOfSize(removed)
+            decrementSize(removed)
         }
         return removed
     }
 
-    private fun decrementBitmapOfSize(removed: IValue) {
+    private fun decrementSize(removed: IValue) {
         val sizes = getSizesForType(removed.type())
         val size = removed.size()
         val current = sizes[removed.size()]
