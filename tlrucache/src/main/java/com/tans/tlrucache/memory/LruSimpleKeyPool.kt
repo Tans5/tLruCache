@@ -3,7 +3,7 @@ package com.tans.tlrucache.memory
 import com.tans.tlrucache.memory.internal.GroupedLinkedMap
 
 class LruSimpleKeyPool<Value : IKey>(
-    private val maxSize: Long,
+    private val maxSize: Int,
     private val createNewValue: (key: Int) -> Value
 ) {
 
@@ -15,7 +15,7 @@ class LruSimpleKeyPool<Value : IKey>(
     fun put(key: Int, value: Value) {
         groupedMap.put(key, value)
         currentSize++
-        trimToSize(currentSize)
+        trimToSize(maxSize)
     }
 
     @Synchronized
