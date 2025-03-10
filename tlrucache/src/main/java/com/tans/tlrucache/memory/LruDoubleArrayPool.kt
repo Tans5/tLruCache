@@ -1,8 +1,11 @@
 package com.tans.tlrucache.memory
 
-class LruDoubleArrayPool(maxSize: Long) : LruMemoryPool<ArrayKey, LruDoubleArrayPool.Companion.DoubleArrayValue>(
+class LruDoubleArrayPool(
+    maxSize: Long,
+    createNewValue: (key: ArrayKey) -> DoubleArrayValue = { key -> DoubleArrayValue(DoubleArray(key.size)) }
+) : LruMemoryPool<ArrayKey, LruDoubleArrayPool.Companion.DoubleArrayValue>(
     maxSize = maxSize,
-    createNewValue = { key -> DoubleArrayValue(DoubleArray(key.size)) }
+    createNewValue = createNewValue
 ) {
 
     private val keyPool: LruSimpleKeyPool<ArrayKey> by lazy {
@@ -23,7 +26,9 @@ class LruDoubleArrayPool(maxSize: Long) : LruMemoryPool<ArrayKey, LruDoubleArray
 
             override fun size(): Int = value.size * 8
 
-            override fun clear() {  }
+            override fun clear() {
+                repeat(value.size) { value[it] = 0.0 }
+            }
 
             override fun type(): Any  = value.size
 

@@ -23,7 +23,9 @@ class LruIntArrayPool(maxSize: Long) : LruMemoryPool<ArrayKey, LruIntArrayPool.C
 
             override fun size(): Int = value.size * 4
 
-            override fun clear() {  }
+            override fun clear() {
+                repeat(value.size) { value[it] = 0 }
+            }
 
             override fun type(): Any  = value.size
 

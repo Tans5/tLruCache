@@ -2,9 +2,12 @@ package com.tans.tlrucache.memory
 
 import java.util.Arrays
 
-class LruByteArrayPool(maxSize: Long) : LruMemoryPool<ArrayKey, LruByteArrayPool.Companion.ByteArrayValue>(
+class LruByteArrayPool(
+    maxSize: Long,
+    createNewValue: (key: ArrayKey) -> ByteArrayValue = { key -> ByteArrayValue(ByteArray(key.size)) }
+) : LruMemoryPool<ArrayKey, LruByteArrayPool.Companion.ByteArrayValue>(
     maxSize = maxSize,
-    createNewValue = { key -> ByteArrayValue(ByteArray(key.size)) }
+    createNewValue = createNewValue
 ) {
 
     private val keyPool: LruSimpleKeyPool<ArrayKey> by lazy {
