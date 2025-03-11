@@ -55,7 +55,12 @@ publishing {
                 archiveClassifier.set("sources")
                 from(sourceSets.getByName("main").allSource)
             }
+            val javaDoc by tasks.creating(Jar::class.java) {
+                archiveClassifier.set("javadoc")
+                from(tasks.javadoc.get().destinationDir)
+            }
             artifact(sourceCode)
+            artifact(javaDoc)
             pom {
                 name = "tLruCache"
                 description = "Disk and memory disk cache for Android and Jvm lib."
@@ -96,6 +101,9 @@ publishing {
     }
 }
 
+//tasks.withType<Javadoc> {
+//    options.addStringOption("Xdoclint:none", "-quiet")
+//}
 
 signing {
     sign(publishing.publications.getByName("Default"))
