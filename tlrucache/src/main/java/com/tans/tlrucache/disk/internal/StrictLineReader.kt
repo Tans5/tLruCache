@@ -62,14 +62,9 @@ internal class StrictLineReader(`in`: InputStream, capacity: Int, charset: Chars
      * @param capacity the capacity of the buffer.
      * @param charset the charset used to decode data. Only US-ASCII, UTF-8 and ISO-8859-1 are
      * supported.
-     * @throws NullPointerException if `in` or `charset` is null.
-     * @throws IllegalArgumentException if `capacity` is negative or zero
      * or the specified charset is not supported.
      */
     init {
-        if (`in` == null || charset == null) {
-            throw NullPointerException()
-        }
         require(capacity >= 0) { "capacity <= 0" }
         require(charset == Util.US_ASCII) { "Unsupported encoding" }
 
