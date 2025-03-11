@@ -1,6 +1,7 @@
 
-A Disk & Memory LRU Cache Library for JVM/Android
-Inspired by [Glide](https://github.com/bumptech/glide)'s implementation
+A Disk & Memory LRU Cache Library for JVM/Android.  
+Inspired by [Glide](https://github.com/bumptech/glide)'s implementation.  
+[![](https://img.shields.io/maven-metadata/v.svg?label=maven-central&metadataUrl=https%3A%2F%2Frepo1.maven.org%2Fmaven2%2Fio%2Fgithub%2Ftans5%2Ftlrucache%2Fmaven-metadata.xml)](https://central.sonatype.com/artifact/io.github.tans5/tlrucache)
 
 ## Installation
 
