@@ -240,23 +240,46 @@ class DiskLruCache private constructor(
      * cache. Dirty entries are assumed to be inconsistent and will be deleted.
      */
     @Throws(IOException::class)
-    private fun processJournal() {
+    private fun processJournal(deleteDirtyFile: Boolean) {
         deleteIfExists(journalFileTmp)
         val i = lruEntries.values.iterator()
         while (i.hasNext()) {
             val entry = i.next()
             if (entry.currentEditor == null) {
-                for (t in 0..<valueCount) {
+                for (t in 0..< valueCount) {
                     size += entry.lengths[t]
                 }
             } else {
-                // Delete dirty file.
+                // Dirty file.
                 entry.currentEditor = null
-                for (t in 0..<valueCount) {
-                    deleteIfExists(entry.getCleanFile(t))
-                    deleteIfExists(entry.getDirtyFile(t))
+                // first: clean file; second: dirty file.
+                val files = mutableListOf<Pair<File, File>>()
+                for (t in 0..< valueCount) {
+                    files.add(entry.getCleanFile(t) to entry.getDirtyFile(t))
                 }
-                i.remove()
+                if (deleteDirtyFile || files.any { !it.first.exists() && !it.second.exists() }) {
+                    // Delete dirty file.
+                    for ((cleanFile, dirtyFile) in files) {
+                        deleteIfExists(cleanFile)
+                        deleteIfExists(dirtyFile)
+                    }
+                    i.remove()
+                } else {
+                    // Make dirty file clean
+                    val sizes = ArrayList<String>()
+                    for ((cleanFile, dirtyFile) in files) {
+                        val fileSize = if (dirtyFile.exists()) {
+                            renameTo(dirtyFile, cleanFile, true)
+                            cleanFile.length()
+                        } else {
+                            cleanFile.length()
+                        }
+                        sizes.add(fileSize.toString())
+                        size += fileSize
+                    }
+                    entry.readable = true
+                    entry.setLengths(sizes.toTypedArray())
+                }
             }
         }
     }
@@ -802,7 +825,7 @@ class DiskLruCache private constructor(
          * @throws IOException if reading or writing the cache directory fails
          */
         @Throws(IOException::class)
-        fun open(directory: File, appVersion: Int, valueCount: Int, maxSize: Long): DiskLruCache {
+        fun open(directory: File, appVersion: Int, valueCount: Int, maxSize: Long, deleteDirtyFile: Boolean = true): DiskLruCache {
             require(maxSize > 0) { "maxSize <= 0" }
             require(valueCount > 0) { "valueCount <= 0" }
 
@@ -823,7 +846,7 @@ class DiskLruCache private constructor(
             if (cache.journalFile.exists()) {
                 try {
                     cache.readJournal()
-                    cache.processJournal()
+                    cache.processJournal(deleteDirtyFile)
                     return cache
                 } catch (journalIsCorrupt: IOException) {
                     println(
