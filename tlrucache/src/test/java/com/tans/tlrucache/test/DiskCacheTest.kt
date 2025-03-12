@@ -21,8 +21,8 @@ class DiskCacheTest {
 
     private val baseDir = File("./src/test/testCache")
 
-    private val baseDirtyDir = File("./src/test/testDirtyCache")
-    private val dirtyFileKey = "dirtyfile"
+    private val baseAppendDir = File("./src/test/testAppendCache")
+    private val appendFileKey = "appendfile"
 
     @Test
     fun testDiskCacheWrite() {
@@ -72,38 +72,38 @@ class DiskCacheTest {
     }
 
     @Test
-    fun testMakeDirtyFile() {
+    fun testMakeAppendDirtyFile() {
         val diskCache = DiskLruCache.open(
-            directory = baseDirtyDir,
+            directory = baseAppendDir,
             appVersion = 1,
             valueCount = 1,
             maxSize = 1024L * 5L,
-            deleteDirtyFile = false
+            isAppendMode = true
         )
-        val editor = diskCache.edit(dirtyFileKey)!!
+        val editor = diskCache.edit(appendFileKey)!!
         val file = editor.getFile(0)
         if (!file.exists()) {
             file.createNewFile()
         }
         file.outputStream().use {
-            it.write("This is a dirty file test".toByteArray(Charsets.UTF_8))
+            it.write("This is a dirty file test: ${System.currentTimeMillis()}\n".toByteArray(Charsets.UTF_8))
         }
         // Do not commit to make a dirty file.
     }
 
     @Test
-    fun testInitNotDeleteDirtyFile() {
+    fun testInitAppendDirtyFile() {
         val diskCache = DiskLruCache.open(
-            directory = baseDirtyDir,
+            directory = baseAppendDir,
             appVersion = 1,
             valueCount = 1,
             maxSize = 1024L * 5L,
-            deleteDirtyFile = false
+            isAppendMode = true
         )
-        val value = diskCache.get(dirtyFileKey)
+        val value = diskCache.get(appendFileKey)
         if (value != null) {
             val text = value.getFile(0).inputStream().reader(Charsets.UTF_8).use { it.readText() }
-            println("Read from dirty file: $text")
+            println("Read from dirty file: \n$text")
         } else {
             println("No dirty file to read.")
         }
@@ -112,12 +112,12 @@ class DiskCacheTest {
     @Test
     fun testInitDeleteDirtyFile() {
         val diskCache = DiskLruCache.open(
-            directory = baseDirtyDir,
+            directory = baseAppendDir,
             appVersion = 1,
             valueCount = 1,
             maxSize = 1024L * 5L
         )
-        val value = diskCache.get(dirtyFileKey)
+        val value = diskCache.get(appendFileKey)
         if (value == null) {
             println("No dirty file.")
         } else {

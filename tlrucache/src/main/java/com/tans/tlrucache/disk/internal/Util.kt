@@ -1,5 +1,6 @@
 package com.tans.tlrucache.disk.internal
 
+import com.tans.tlrucache.memory.LruByteArrayPool
 import java.io.Closeable
 import java.io.File
 import java.io.IOException
@@ -54,5 +55,9 @@ internal object Util {
             } catch (ignored: Exception) {
             }
         }
+    }
+
+    val byteArrayPool: LruByteArrayPool by lazy {
+        LruByteArrayPool(1024L * 10L)
     }
 }

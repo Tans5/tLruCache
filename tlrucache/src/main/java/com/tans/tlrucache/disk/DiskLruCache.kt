@@ -3,6 +3,7 @@ package com.tans.tlrucache.disk
 import com.tans.tlrucache.disk.DiskLruCache.Editor
 import com.tans.tlrucache.disk.internal.StrictLineReader
 import com.tans.tlrucache.disk.internal.Util
+import com.tans.tlrucache.memory.LruByteArrayPool
 import java.io.BufferedWriter
 import java.io.Closeable
 import java.io.EOFException
@@ -15,6 +16,7 @@ import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.OutputStream
 import java.io.OutputStreamWriter
+import java.io.RandomAccessFile
 import java.io.Writer
 import java.util.concurrent.Callable
 import java.util.concurrent.LinkedBlockingQueue
@@ -115,7 +117,8 @@ class DiskLruCache private constructor(
           */val directory: File,
     private val appVersion: Int,
     private val valueCount: Int,
-    private var maxSize: Long
+    private var maxSize: Long,
+    private val isAppendMode: Boolean
 ) : Closeable {
 
     private val journalFile: File = File(directory, JOURNAL_FILE)
@@ -240,7 +243,7 @@ class DiskLruCache private constructor(
      * cache. Dirty entries are assumed to be inconsistent and will be deleted.
      */
     @Throws(IOException::class)
-    private fun processJournal(deleteDirtyFile: Boolean) {
+    private fun processJournal() {
         deleteIfExists(journalFileTmp)
         val i = lruEntries.values.iterator()
         while (i.hasNext()) {
@@ -257,7 +260,7 @@ class DiskLruCache private constructor(
                 for (t in 0..< valueCount) {
                     files.add(entry.getCleanFile(t) to entry.getDirtyFile(t))
                 }
-                if (deleteDirtyFile || files.any { !it.first.exists() && !it.second.exists() }) {
+                if (!isAppendMode || files.any { !it.first.exists() && !it.second.exists() }) {
                     // Delete dirty file.
                     for ((cleanFile, dirtyFile) in files) {
                         deleteIfExists(cleanFile)
@@ -265,11 +268,11 @@ class DiskLruCache private constructor(
                     }
                     i.remove()
                 } else {
-                    // Make dirty file clean
+                    // Concat clean file and dirty file
                     val sizes = ArrayList<String>()
                     for ((cleanFile, dirtyFile) in files) {
                         val fileSize = if (dirtyFile.exists()) {
-                            renameTo(dirtyFile, cleanFile, true)
+                            concatTwoFiles(first = cleanFile, second = dirtyFile)
                             cleanFile.length()
                         } else {
                             cleanFile.length()
@@ -279,6 +282,14 @@ class DiskLruCache private constructor(
                     }
                     entry.readable = true
                     entry.setLengths(sizes.toTypedArray())
+
+                    val journalWriter = this.journalWriter!!
+                    journalWriter.append(CLEAN)
+                    journalWriter.append(' ')
+                    journalWriter.append(entry.key)
+                    journalWriter.append(entry.getLengths())
+                    journalWriter.append('\n')
+                    flushWriter(journalWriter)
                 }
             }
         }
@@ -457,8 +468,12 @@ class DiskLruCache private constructor(
             if (success) {
                 if (dirty.exists()) {
                     val clean = entry.getCleanFile(i)
-                    dirty.renameTo(clean)
                     val oldLength = entry.lengths[i]
+                    if (!isAppendMode) {
+                        dirty.renameTo(clean)
+                    } else {
+                        concatTwoFiles(first = clean, second = dirty)
+                    }
                     val newLength = clean.length()
                     entry.lengths[i] = newLength
                     size = size - oldLength + newLength
@@ -825,7 +840,13 @@ class DiskLruCache private constructor(
          * @throws IOException if reading or writing the cache directory fails
          */
         @Throws(IOException::class)
-        fun open(directory: File, appVersion: Int, valueCount: Int, maxSize: Long, deleteDirtyFile: Boolean = true): DiskLruCache {
+        fun open(
+            directory: File,
+            appVersion: Int,
+            valueCount: Int,
+            maxSize: Long,
+            isAppendMode: Boolean = false
+        ): DiskLruCache {
             require(maxSize > 0) { "maxSize <= 0" }
             require(valueCount > 0) { "valueCount <= 0" }
 
@@ -842,11 +863,17 @@ class DiskLruCache private constructor(
             }
 
             // Prefer to pick up where we left off.
-            var cache = DiskLruCache(directory, appVersion, valueCount, maxSize)
+            var cache = DiskLruCache(
+                directory = directory,
+                appVersion = appVersion,
+                valueCount = valueCount,
+                maxSize = maxSize,
+                isAppendMode = isAppendMode
+            )
             if (cache.journalFile.exists()) {
                 try {
                     cache.readJournal()
-                    cache.processJournal(deleteDirtyFile)
+                    cache.processJournal()
                     return cache
                 } catch (journalIsCorrupt: IOException) {
                     println(
@@ -862,7 +889,7 @@ class DiskLruCache private constructor(
 
             // Create a new empty cache.
             directory.mkdirs()
-            cache = DiskLruCache(directory, appVersion, valueCount, maxSize)
+            cache = DiskLruCache(directory, appVersion, valueCount, maxSize, isAppendMode)
             cache.rebuildJournal()
             return cache
         }
@@ -882,6 +909,43 @@ class DiskLruCache private constructor(
             if (!from.renameTo(to)) {
                 throw IOException()
             }
+        }
+
+        @Throws(IOException::class)
+        private fun concatTwoFiles(first: File, second: File) {
+            if (!second.exists() || second.length() == 0L) {
+                deleteIfExists(second)
+                return
+            }
+            if (!first.exists() || first.length() == 0L) {
+                renameTo(second, first, true)
+                return
+            }
+            val firstFileLen = first.length()
+            val secondFileLen = second.length()
+            val randomFile = RandomAccessFile(first, "rw")
+            try {
+                randomFile.use {
+                    randomFile.setLength(firstFileLen + secondFileLen)
+                    randomFile.seek(firstFileLen)
+                    second.inputStream().use { inputStream ->
+                        var readSize: Int
+                        val bufferCache = Util.byteArrayPool.get(1024)
+                        val buffer = bufferCache.value
+                        do {
+                            readSize = inputStream.read(buffer)
+                            if (readSize > 0) {
+                                randomFile.write(buffer, 0, readSize)
+                            }
+                        } while (readSize >= 0)
+                        Util.byteArrayPool.put(bufferCache)
+                    }
+                }
+            } catch (e: Throwable) {
+                randomFile.setLength(firstFileLen)
+                throw e
+            }
+            deleteIfExists(second)
         }
 
         @Throws(IOException::class)
