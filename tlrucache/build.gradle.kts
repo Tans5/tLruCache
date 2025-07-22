@@ -51,11 +51,11 @@ publishing {
             afterEvaluate {
                 artifact(tasks.getByName("jar"))
             }
-            val sourceCode by tasks.creating(Jar::class.java) {
+            val sourceCode by tasks.registering(Jar::class) {
                 archiveClassifier.set("sources")
                 from(sourceSets.getByName("main").allSource)
             }
-            val javaDoc by tasks.creating(Jar::class.java) {
+            val javaDoc by tasks.registering(Jar::class) {
                 archiveClassifier.set("javadoc")
                 from(tasks.javadoc.get().destinationDir)
             }
